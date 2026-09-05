@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "virtualdatapro.wireguard",
+  "name": "WireGuard",
+  "version": "0.2.0",
+  "author": "VirtualDataPro",
+  "license": "MIT",
+  "description": "WireGuard tunnel status, transactional switching, import, configuration, QR export and live traffic in the Omarchy bar.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Widget.qml"
+  },
+  "barWidget": {
+    "displayName": "WireGuard",
+    "description": "View and toggle WireGuard tunnels.",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {}
+  }
+}
