@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "virtualdatapro.wireguard",
   "name": "WireGuard",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": "VirtualDataPro",
   "license": "MIT",
   "description": "WireGuard tunnel status, transactional switching, import, configuration, QR export and live traffic in the Omarchy bar.",

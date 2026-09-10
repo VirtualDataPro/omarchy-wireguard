@@ -2,12 +2,14 @@
 """WireGuard metadata, configuration and counters. Secrets never leave this process."""
 import base64
 import configparser
+from contextlib import contextmanager
 import ipaddress
 import json
 import os
 from pathlib import Path
 import re
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -164,10 +166,7 @@ def build_tunnel(data):
     NM, GLib = libraries()
     content = data.get('config', '')
     if data.get('path'):
-        path = Path(data['path']).expanduser()
-        if not path.is_file() or path.stat().st_size > 262144:
-            raise ValueError('Choose a configuration file smaller than 256 KiB')
-        content = path.read_text()
+        content = read_config_file(data['path'])
     interface, peers = parse_config(content)
     name = str(data.get('name', '')).strip()
     if not name or len(name) > 128:
@@ -292,22 +291,139 @@ def switch(identifier):
     return {'ok': True, 'message': 'Tunnel switched'}
 
 
+CONFIG_LIMIT = 262144
+QR_MARKER = 'user.omarchy-wireguard.qr'
+QR_MARKER_VALUE = b'1'
+
+
+@contextmanager
+def open_directory(path):
+    """Walk from / using directory descriptors; never traverse a symlink."""
+    path = Path(os.path.abspath(path))
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    fd = os.open('/', flags)
+    try:
+        for part in path.parts[1:]:
+            child = os.open(part, flags, dir_fd=fd)
+            os.close(fd)
+            fd = child
+        yield fd
+    finally:
+        os.close(fd)
+
+
+def read_config_file(filename):
+    path = Path(os.path.abspath(Path(filename).expanduser()))
+    with open_directory(path.parent) as parent:
+        fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                     dir_fd=parent)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > CONFIG_LIMIT:
+            raise ValueError('Choose a regular configuration file no larger than 256 KiB')
+        # The file can grow after fstat. Limit bytes read at the producer, too.
+        content = bytearray()
+        while len(content) <= CONFIG_LIMIT:
+            chunk = os.read(fd, min(65536, CONFIG_LIMIT + 1 - len(content)))
+            if not chunk:
+                break
+            content.extend(chunk)
+        if len(content) > CONFIG_LIMIT:
+            raise ValueError('Configuration is too large')
+        try:
+            return content.decode('utf-8')
+        except UnicodeDecodeError:
+            raise ValueError('Configuration must be UTF-8 text') from None
+    finally:
+        os.close(fd)
+
+
+def require_private_directory(fd):
+    info = os.fstat(fd)
+    if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) != 0o700):
+        raise ValueError('QR runtime directory must be owned by you with mode 0700')
+
+
+@contextmanager
 def qr_directory():
-    path = Path(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}')) / 'omarchy-wireguard'
-    path.mkdir(mode=0o700, exist_ok=True)
-    path.chmod(0o700)
-    return path
+    runtime = Path(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'))
+    if not runtime.is_absolute():
+        raise ValueError('QR runtime directory must be absolute')
+    with open_directory(runtime) as parent:
+        require_private_directory(parent)
+        try:
+            os.mkdir('omarchy-wireguard', mode=0o700, dir_fd=parent)
+        except FileExistsError:
+            pass
+        fd = os.open('omarchy-wireguard', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                     dir_fd=parent)
+        try:
+            require_private_directory(fd)
+            yield fd, runtime / 'omarchy-wireguard'
+        finally:
+            os.close(fd)
+
+
+def clear_qr_files(directory):
+    for name in os.listdir(directory):
+        if not re.fullmatch(r'qr-[0-9a-f]{32}\.png', name):
+            continue
+        # Only remove our marked, private, singly-linked regular exports.
+        try:
+            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                         dir_fd=directory)
+        except OSError:
+            continue
+        try:
+            info = os.fstat(fd)
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                    or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1):
+                continue
+            try:
+                if os.getxattr(fd, QR_MARKER) != QR_MARKER_VALUE:
+                    continue
+            except OSError:
+                continue
+            current = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            if (current.st_dev, current.st_ino) == (info.st_dev, info.st_ino):
+                os.unlink(name, dir_fd=directory)
+        except FileNotFoundError:
+            pass
+        finally:
+            os.close(fd)
 
 
 def clear_qr():
-    directory = qr_directory()
-    for path in directory.glob('qr-*.png'):
-        path.unlink(missing_ok=True)
+    with qr_directory() as (directory, _):
+        clear_qr_files(directory)
     return {'ok': True}
 
 
+def write_qr(content):
+    with qr_directory() as (directory, path):
+        clear_qr_files(directory)
+        name = 'qr-' + uuid.uuid4().hex + '.png'
+        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                     0o600, dir_fd=directory)
+        try:
+            os.fchmod(fd, 0o600)
+            os.setxattr(fd, QR_MARKER, QR_MARKER_VALUE)
+            # qrencode writes to the already-open file, never reopens a path.
+            result = subprocess.run(['qrencode', '-t', 'PNG', '-s', '6', '-m', '3', '-o', '-'],
+                                    input=content, text=True, stdout=fd,
+                                    stderr=subprocess.PIPE, timeout=10)
+            if result.returncode:
+                raise ValueError('This configuration is too large for a QR code')
+        except BaseException:
+            os.unlink(name, dir_fd=directory)
+            raise
+        finally:
+            os.close(fd)
+        return {'qr': str(path / name)}
+
+
 def export_qr(identifier):
-    import tempfile
     _, conn = remote(identifier)
     secret_data = conn.get_secrets('wireguard', None)
     conn.update_secrets('wireguard', secret_data)
@@ -337,15 +453,7 @@ def export_qr(identifier):
         lines.append('AllowedIPs = ' + ', '.join(peer.get_allowed_ip(j) for j in range(peer.get_allowed_ips_len())))
         if peer.get_persistent_keepalive():
             lines.append('PersistentKeepalive = ' + str(peer.get_persistent_keepalive()))
-    clear_qr()
-    fd, filename = tempfile.mkstemp(prefix='qr-', suffix='.png', dir=qr_directory())
-    os.close(fd)
-    result = subprocess.run(['qrencode', '-t', 'PNG', '-s', '6', '-m', '3', '-o', filename],
-                            input='\n'.join(lines) + '\n', text=True, capture_output=True, timeout=10)
-    if result.returncode:
-        Path(filename).unlink(missing_ok=True)
-        raise ValueError('This configuration is too large for a QR code')
-    return {'qr': filename}
+    return write_qr('\n'.join(lines) + '\n')
 
 
 def main(args):

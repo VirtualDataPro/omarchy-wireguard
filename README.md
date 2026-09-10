@@ -1,7 +1,7 @@
 # WireGuard for Omarchy
 
 A native Omarchy bar widget for NetworkManager WireGuard tunnels.
-Plugin ID: `virtualdatapro.wireguard` · Version 0.2.0.
+Plugin ID: `virtualdatapro.wireguard` · Version 0.2.1.
 
 ## Features
 
@@ -44,7 +44,10 @@ Supported Interface fields: `PrivateKey`, `Address`, `DNS` (IP addresses), `MTU`
 
 Imports reject hooks, `Table`, `SaveConfig`, and unsupported options rather than
 silently ignoring them. Use NetworkManager's own tooling for advanced routing
-policies or configurations outside this supported subset.
+policies or configurations outside this supported subset. File imports reject symlinks
+(including symlinked parent directories) and non-regular files. Reads use the
+opened file descriptor and are limited to 256 KiB, including files that grow
+during reading.
 
 ## Secrets and QR export
 
@@ -58,6 +61,16 @@ QR export requests keys from NetworkManager only when selected. It creates a
 on closing/backing out of the panel and at plugin startup. A QR code grants the
 same access as the exported private key. Export covers the core WireGuard fields;
 it does not reproduce custom NetworkManager route rules or DNS policies.
+
+The runtime directory and export directory must be real directories owned by
+the current user with mode 0700; unsafe existing paths are rejected, not repaired.
+All directory traversal rejects symlinks. QR generation writes through an
+exclusively created file descriptor; cleanup stays relative to the verified
+export directory and only removes private, singly-linked regular files with
+plugin-generated names and the plugin's `user.omarchy-wireguard.qr` extended
+attribute. The runtime filesystem must support user extended attributes
+(standard Linux `/run/user` tmpfs does). Unmarked files from older versions are
+left untouched and expire with the runtime directory at logout/reboot.
 
 ## Requirements
 
@@ -125,7 +138,8 @@ python3 backend.py status
 ```
 
 Tests cover import parsing/native connection construction, disabled imports,
-UUID targeting, switching order/rollback/timeouts, private QR file handling,
+UUID targeting, switching order/rollback/timeouts, QR symlink and directory
+replacement attacks, private-file cleanup, bounded configuration reads,
 counter resets, and drop-notification transitions. Live NetworkManager import,
 rename/save, and QR export were verified using a temporary disabled profile,
 then that profile was deleted. The maintainer also verified real tunnel traffic
