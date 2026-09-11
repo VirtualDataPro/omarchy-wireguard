@@ -3,6 +3,8 @@
 A native Omarchy bar widget for NetworkManager WireGuard tunnels.
 Plugin ID: `virtualdatapro.wireguard` · Version 0.2.1.
 
+![WireGuard panel showing an active tunnel, tunnel controls, and live traffic graph](preview.png)
+
 ## Features
 
 - WireGuard dragon icon, Omarchy panel headers, buttons, switches and text fields.
