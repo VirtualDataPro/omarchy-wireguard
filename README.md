@@ -8,6 +8,8 @@ Plugin ID: `virtualdatapro.wireguard` · Version 0.2.1.
 ## Features
 
 - WireGuard dragon icon, Omarchy panel headers, buttons, switches and text fields.
+- The bar icon matches the other icons' foreground colour when no tunnel is active
+  and turns red when any tunnel is active.
 - Tunnel status and individual enable/disable controls.
 - **Switch here** activates the selected tunnel before deactivating the other active
   NetworkManager WireGuard tunnels. Failure triggers best-effort rollback of the

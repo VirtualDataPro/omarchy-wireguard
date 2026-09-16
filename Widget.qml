@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls as Controls
 import QtQuick.Dialogs
+import QtQuick.Effects
 import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
@@ -66,7 +67,14 @@ Panel {
                 source: Qt.resolvedUrl("assets/wireguard.svg")
                 sourceSize.width: 64; sourceSize.height: 64
                 fillMode: Image.PreserveAspectFit
-                opacity: vpn.active ? 1 : 0.55
+                layer.enabled: !vpn.active
+                layer.effect: MultiEffect {
+                    // Normalize the red artwork to white before applying the bar colour.
+                    contrast: -1
+                    brightness: 0.5
+                    colorization: 1
+                    colorizationColor: button.foreground
+                }
             }
         }
         onPressed: function(buttonCode) { root.toggle() }
