@@ -4,6 +4,7 @@ import QtQuick.Dialogs
 import QtQuick.Effects
 import QtQuick.Layouts
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 Panel {
@@ -17,7 +18,7 @@ Panel {
     property bool autoConnect: false
     readonly property var selected: vpn.profiles.find(p => p.uuid === vpn.selectedUuid) || null
     readonly property var graphSamples: vpn.history[vpn.selectedUuid] || []
-    readonly property color dim: Qt.darker(Color.foreground, 1.5)
+    readonly property color dim: Qt.darker(Commons.Color.foreground, 1.5)
 
     function showOverview() { page = "overview"; vpn.clearQr(); Qt.callLater(() => keys.forceActiveFocus()) }
     function beginAdd() {
@@ -124,7 +125,7 @@ Panel {
                     Text {
                         Layout.fillWidth: true; visible: vpn.error !== "" || vpn.message !== ""
                         text: vpn.error || vpn.message; textFormat: Text.PlainText; wrapMode: Text.Wrap
-                        color: vpn.error ? Color.urgent : Color.foreground
+                        color: vpn.error ? Commons.Color.urgent : Commons.Color.foreground
                         font.family: Style.font.family; font.pixelSize: Style.font.caption
                     }
                     ColumnLayout {
@@ -148,10 +149,10 @@ Panel {
                                 MouseArea { anchors.fill: parent; onClicked: vpn.selectedUuid = tunnelRow.modelData.uuid }
                                 RowLayout {
                                     anchors.fill: parent; anchors.margins: Style.space(8); spacing: Style.space(10)
-                                    Rectangle { width: Style.space(6); height: width; radius: width / 2; color: tunnelRow.modelData.active ? Color.accent : root.dim }
+                                    Rectangle { width: Style.space(6); height: width; radius: width / 2; color: tunnelRow.modelData.active ? Commons.Color.accent : root.dim }
                                     ColumnLayout {
                                         Layout.fillWidth: true; spacing: Style.space(3)
-                                        Text { Layout.fillWidth: true; text: tunnelRow.modelData.name; textFormat: Text.PlainText; elide: Text.ElideRight; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                                        Text { Layout.fillWidth: true; text: tunnelRow.modelData.name; textFormat: Text.PlainText; elide: Text.ElideRight; color: Commons.Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
                                         Text { text: tunnelRow.modelData.active ? "Active · " + tunnelRow.modelData.device : tunnelRow.modelData.state; textFormat: Text.PlainText; color: root.dim; font.family: Style.font.family; font.pixelSize: Style.font.caption }
                                     }
                                     ToggleSwitch { checked: tunnelRow.modelData.active; busy: vpn.busy; onToggled: { vpn.selectedUuid = tunnelRow.modelData.uuid; vpn.toggle(tunnelRow.modelData) } }
@@ -180,16 +181,16 @@ Panel {
                             Button { text: "Choose .conf file"; iconText: "󰉋"; bordered: true; focusable: true; enabled: !vpn.busy; onClicked: picker.open() }
                             Button { visible: root.importPath !== ""; text: "Clear"; enabled: !vpn.busy; onClicked: root.importPath = "" }
                         }
-                        Text { Layout.fillWidth: true; visible: root.importPath !== ""; text: root.importPath; textFormat: Text.PlainText; elide: Text.ElideMiddle; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { Layout.fillWidth: true; visible: root.importPath !== ""; text: root.importPath; textFormat: Text.PlainText; elide: Text.ElideMiddle; color: Commons.Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.caption }
                         Controls.ScrollView {
                             visible: root.importPath === ""; Layout.fillWidth: true; Layout.preferredHeight: Style.space(180)
                             Controls.TextArea {
                                 id: configText
                                 placeholderText: "Or paste a WireGuard configuration\n\n[Interface]\nPrivateKey = …\nAddress = …\n\n[Peer]\nPublicKey = …\nAllowedIPs = …\nEndpoint = …"
-                                color: Color.foreground; placeholderTextColor: root.dim
+                                color: Commons.Color.foreground; placeholderTextColor: root.dim
                                 font.family: Style.font.family; font.pixelSize: Style.font.caption
                                 textFormat: TextEdit.PlainText; wrapMode: TextEdit.Wrap; enabled: !vpn.busy
-                                background: Rectangle { color: Color.background; border.color: Color.accent; border.width: 1; radius: Style.cornerRadius }
+                                background: Rectangle { color: Commons.Color.background; border.color: Commons.Color.accent; border.width: 1; radius: Style.cornerRadius }
                             }
                         }
                         Text { Layout.fillWidth: true; text: "The tunnel will be saved disabled. Configuration keys are sent directly to NetworkManager."; wrapMode: Text.Wrap; color: root.dim; font.family: Style.font.family; font.pixelSize: Style.font.caption }
@@ -211,7 +212,7 @@ Panel {
                         TextField { id: editMtu; Layout.fillWidth: true; validator: IntValidator { bottom: 0; top: 65535 } enabled: !vpn.busy }
                         RowLayout {
                             Layout.fillWidth: true
-                            Text { Layout.fillWidth: true; text: "Connect automatically"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                            Text { Layout.fillWidth: true; text: "Connect automatically"; color: Commons.Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
                             ToggleSwitch { checked: root.autoConnect; busy: vpn.busy; onToggled: root.autoConnect = !root.autoConnect }
                         }
                         PanelSectionHeader { text: "PEERS" }
@@ -235,7 +236,7 @@ Panel {
                     ColumnLayout {
                         visible: root.page === "qrConfirm" || root.page === "qr"; Layout.fillWidth: true; spacing: Style.space(12)
                         PanelSectionHeader { text: "EXPORT TUNNEL" }
-                        Text { Layout.fillWidth: true; text: "This QR code contains the tunnel’s private key. Only show it to a device you want to give access to this tunnel."; wrapMode: Text.Wrap; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                        Text { Layout.fillWidth: true; text: "This QR code contains the tunnel’s private key. Only show it to a device you want to give access to this tunnel."; wrapMode: Text.Wrap; color: Commons.Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
                         Button { visible: root.page === "qrConfirm"; text: "Show QR code"; bordered: true; focusable: true; enabled: !vpn.busy; onClicked: vpn.run("qr", vpn.selectedUuid) }
                         Image { visible: root.page === "qr"; Layout.alignment: Qt.AlignHCenter; Layout.preferredWidth: Style.space(300); Layout.preferredHeight: Style.space(300); source: vpn.qrPath; fillMode: Image.PreserveAspectFit; smooth: false; cache: false }
                         Text { Layout.fillWidth: true; visible: root.page === "qr"; text: "Scan with the WireGuard app. The temporary image is removed when this panel closes."; wrapMode: Text.Wrap; color: root.dim; font.family: Style.font.family; font.pixelSize: Style.font.caption }
